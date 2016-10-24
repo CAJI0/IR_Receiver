@@ -39,6 +39,7 @@
 #include "tim.h"
 #include "usart.h"
 
+#define TRANSMIT_KEY_CODE
 
 #define IR_ON         0x0C
 #define IR_MUTE       0x0D
@@ -108,14 +109,18 @@ uint16_t receive_data;
 uint8_t last_edge;
 uint8_t key_code;
 
+
 void Transmit_Key_Code(void);
+
+void Transmit_IR_Code(void);
+
 
 /* USER CODE END 0 */
 
 /* External variables --------------------------------------------------------*/
 
 /******************************************************************************/
-/*            Cortex-M0 Processor Interruption and Exception Handlers         */
+/*            Cortex-M0 Processor Interruption and Exception Handlers         */ 
 /******************************************************************************/
 
 /**
@@ -141,6 +146,20 @@ void SysTick_Handler(void)
 /******************************************************************************/
 
 /**
+* @brief This function handles EXTI line 0 and 1 interrupts.
+*/
+void EXTI0_1_IRQHandler(void)
+{
+  /* USER CODE BEGIN EXTI0_1_IRQn 0 */
+
+  /* USER CODE END EXTI0_1_IRQn 0 */
+  HAL_GPIO_EXTI_IRQHandler(GPIO_PIN_0);
+  /* USER CODE BEGIN EXTI0_1_IRQn 1 */
+	HAL_GPIO_WritePin(PWR_ON_GPIO_Port, PWR_ON_Pin, GPIO_PIN_RESET);
+  /* USER CODE END EXTI0_1_IRQn 1 */
+}
+
+/**
 * @brief This function handles EXTI line 4 to 15 interrupts.
 */
 void EXTI4_15_IRQHandler(void)
@@ -150,9 +169,8 @@ void EXTI4_15_IRQHandler(void)
   /* USER CODE END EXTI4_15_IRQn 0 */
   HAL_GPIO_EXTI_IRQHandler(GPIO_PIN_7);
   /* USER CODE BEGIN EXTI4_15_IRQn 1 */
-uint16_t tmp;
+	uint16_t tmp;
 	
-	HAL_GPIO_TogglePin(IR_VALID_GPIO_Port, IR_VALID_Pin);
 	if(mode == IDLE)
 	{
 		__HAL_TIM_SET_COUNTER(&htim16, 0);
@@ -189,7 +207,13 @@ uint16_t tmp;
 			}
 			if((bit_cnt == 14 && !last_bit) || (bit_cnt == 14 && last_bit && last_edge))
 			{
+				#ifdef TRANSMIT_KEY_CODE
 				Transmit_Key_Code();
+				#endif
+				
+				#ifdef TRANSMIT_IR_CODE
+				Transmit_IR_Code();
+				#endif
 			}	
 			
 		}
@@ -208,7 +232,13 @@ uint16_t tmp;
 			
 			if((bit_cnt == 14 && !last_bit) || (bit_cnt == 14 && last_bit && last_edge))
 			{	
+				#ifdef TRANSMIT_KEY_CODE
 				Transmit_Key_Code();
+				#endif
+				
+				#ifdef TRANSMIT_IR_CODE
+				Transmit_IR_Code();
+				#endif
 			}
 		}
 		else
@@ -311,6 +341,29 @@ void Transmit_Key_Code(void)
   }
   HAL_NVIC_EnableIRQ(EXTI4_15_IRQn);
 }
+
+
+
+void Transmit_IR_Code(void)
+{
+  __HAL_TIM_DISABLE(&htim16);
+  HAL_NVIC_DisableIRQ(EXTI4_15_IRQn);
+  __HAL_UART_ENABLE(&huart1);
+  mode = IDLE;
+	
+	correct_data = receive_data & 0x3F;
+ 
+  if(correct_data == IR_ON)
+  {
+    HAL_GPIO_WritePin(PWR_ON_GPIO_Port, PWR_ON_Pin, GPIO_PIN_SET);
+  }
+  	HAL_GPIO_WritePin(IR_VALID_GPIO_Port, IR_VALID_Pin, GPIO_PIN_SET);
+		HAL_UART_Transmit(&huart1, &correct_data, 1,100);
+		HAL_GPIO_WritePin(IR_VALID_GPIO_Port, IR_VALID_Pin, GPIO_PIN_RESET);
+  
+  HAL_NVIC_EnableIRQ(EXTI4_15_IRQn);
+}
+
 
 /* USER CODE END 1 */
 /************************ (C) COPYRIGHT STMicroelectronics *****END OF FILE****/

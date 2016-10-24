@@ -35,7 +35,7 @@
 #include "tim.h"
 #include "usart.h"
 #include "gpio.h"
-#include "stdio.h"
+
 /* USER CODE BEGIN Includes */
 
 /* USER CODE END Includes */
