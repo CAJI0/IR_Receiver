@@ -64,7 +64,7 @@ void HAL_TIM_Base_MspInit(TIM_HandleTypeDef* tim_baseHandle)
   if(tim_baseHandle->Instance==TIM16)
   {
   /* USER CODE BEGIN TIM16_MspInit 0 */
-		__HAL_TIM_ENABLE_IT(&htim16, TIM_FLAG_UPDATE);
+		
   /* USER CODE END TIM16_MspInit 0 */
     /* Peripheral clock enable */
     __HAL_RCC_TIM16_CLK_ENABLE();
