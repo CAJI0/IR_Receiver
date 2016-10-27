@@ -39,32 +39,32 @@
 #include "tim.h"
 #include "usart.h"
 
-#define TRANSMIT_KEY_CODE
+#define TRANSMIT_IR_CODE
 
-#define IR_ON         0x0C
-#define IR_MUTE       0x0D
-#define IR_IN1        0x01
-#define IR_IN2        0x02
-#define IR_IN3        0x03
-#define IR_INMODE
-#define IR_SCL1X
-#define IR_SCL2X
-#define IR_SCL3X
-#define IR_SCLINE
-#define IR_NAVU       0x20
-#define IR_NAVD       0x21
-#define IR_NAVL       0x11
-#define IR_NAVR       0x10
-#define IR_NAVOK      0x3B
-#define IR_NAVBK
-#define IR_PSETA
-#define IR_PSETB
-#define IR_PSETC
-#define IR_PSETD
-#define IR_PSETE
-#define IR_PSETF
-#define IR_PSETG
-#define IR_PSET0
+#define IR_ON         0x01
+#define IR_MUTE       0x02
+#define IR_IN1        0x03
+#define IR_IN2        0x04
+#define IR_IN3        0x05
+#define IR_INMODE     0x06
+#define IR_SCL1X			0x11
+#define IR_SCL2X			0x12
+#define IR_SCL3X			0x13
+#define IR_SCLINE			0x14
+#define IR_NAVU       0x15
+#define IR_NAVD       0x16
+#define IR_NAVL       0x21
+#define IR_NAVR       0x22
+#define IR_NAVOK      0x23
+#define IR_NAVBK			0x24
+#define IR_PSETA			0x25
+#define IR_PSETB			0x26
+#define IR_PSETC			0x31
+#define IR_PSETD			0x32
+#define IR_PSETE			0x33
+#define IR_PSETF			0x34
+#define IR_PSETG			0x35
+#define IR_PSET0			0x36
 
 #define KEY_ON        0x50
 #define KEY_MUTE      0x51
@@ -91,12 +91,12 @@
 #define KEY_PSETG     0x66
 #define KEY_PSET0     0x67
 
-
-
+#define READ_DIP_SWITCH_0		HAL_GPIO_ReadPin(DIP_SWITCH_BIT_0_GPIO_Port, DIP_SWITCH_BIT_0_Pin)
+#define READ_DIP_SWITCH_1		HAL_GPIO_ReadPin(DIP_SWITCH_BIT_1_GPIO_Port, DIP_SWITCH_BIT_1_Pin)
 
 
 #define IDLE 		0      // mode when we wait for start of next frame
-#define RECEIVE 1   	// mode when we receive the frame
+#define RECEIVE 1   	 // mode when we receive the frame
 
 #define CHECK 	0
 #define IN 			1
@@ -108,16 +108,20 @@ uint8_t correct_data;
 uint16_t receive_data;
 uint8_t last_edge;
 uint8_t key_code;
-
+uint8_t last_control_bit;
+uint8_t first_load = 1;
 
 void Transmit_Key_Code(void);
 
 void Transmit_IR_Code(void);
 
+uint8_t Test_Address(void);
+
 
 /* USER CODE END 0 */
 
 /* External variables --------------------------------------------------------*/
+extern TIM_HandleTypeDef htim16;
 
 /******************************************************************************/
 /*            Cortex-M0 Processor Interruption and Exception Handlers         */ 
@@ -174,7 +178,8 @@ void EXTI4_15_IRQHandler(void)
 	if(mode == IDLE)
 	{
 		__HAL_TIM_SET_COUNTER(&htim16, 0);
-		__HAL_TIM_ENABLE(&htim16);
+		HAL_TIM_Base_Start_IT(&htim16);
+		
 		receive_data = 1;
 		bit_cnt = 1;
 		last_bit = 1;
@@ -207,13 +212,24 @@ void EXTI4_15_IRQHandler(void)
 			}
 			if((bit_cnt == 14 && !last_bit) || (bit_cnt == 14 && last_bit && last_edge))
 			{
-				#ifdef TRANSMIT_KEY_CODE
-				Transmit_Key_Code();
-				#endif
-				
-				#ifdef TRANSMIT_IR_CODE
-				Transmit_IR_Code();
-				#endif
+				if((last_control_bit != ((receive_data >> 11) & 0x01)) || (first_load))
+				{
+					first_load = 0;
+					
+					#ifdef TRANSMIT_KEY_CODE
+					Transmit_Key_Code();
+					#endif
+					
+					#ifdef TRANSMIT_IR_CODE
+					Transmit_IR_Code();
+					#endif
+					last_control_bit = (receive_data >> 11) & 0x01;
+				}
+				else
+				{
+					__HAL_TIM_DISABLE(&htim16);
+					mode = IDLE;
+				}
 			}	
 			
 		}
@@ -232,13 +248,28 @@ void EXTI4_15_IRQHandler(void)
 			
 			if((bit_cnt == 14 && !last_bit) || (bit_cnt == 14 && last_bit && last_edge))
 			{	
-				#ifdef TRANSMIT_KEY_CODE
-				Transmit_Key_Code();
-				#endif
-				
-				#ifdef TRANSMIT_IR_CODE
-				Transmit_IR_Code();
-				#endif
+				if((last_control_bit != ((receive_data >> 11) & 0x01)) || first_load){
+					
+					if(Test_Address()){
+						
+						first_load = 0;
+						
+						#ifdef TRANSMIT_KEY_CODE
+						Transmit_Key_Code();
+						#endif
+						
+						#ifdef TRANSMIT_IR_CODE
+						Transmit_IR_Code();
+						#endif
+						
+						last_control_bit = (receive_data >> 11) & 0x01;
+					}
+				}
+				else
+				{
+					__HAL_TIM_DISABLE(&htim16);
+					mode = IDLE;
+				}
 			}
 		}
 		else
@@ -259,7 +290,25 @@ void EXTI4_15_IRQHandler(void)
   /* USER CODE END EXTI4_15_IRQn 1 */
 }
 
+/**
+* @brief This function handles TIM16 global interrupt.
+*/
+void TIM16_IRQHandler(void)
+{
+  /* USER CODE BEGIN TIM16_IRQn 0 */
+
+  /* USER CODE END TIM16_IRQn 0 */
+  HAL_TIM_IRQHandler(&htim16);
+  /* USER CODE BEGIN TIM16_IRQn 1 */
+	__HAL_TIM_DISABLE(&htim16);
+	mode = IDLE;
+  /* USER CODE END TIM16_IRQn 1 */
+}
+
 /* USER CODE BEGIN 1 */
+
+
+
 
 void Transmit_Key_Code(void)
 {
@@ -273,12 +322,14 @@ void Transmit_Key_Code(void)
 	correct_data = receive_data & 0x3F;
  
 	valid_key = 0x01;
-
+	key_code = 0;
+	
   switch (correct_data) {
     case IR_ON:
     {
       key_code = KEY_ON;
     }break;
+		
     case IR_MUTE:
     {
       key_code = KEY_MUTE;
@@ -298,7 +349,32 @@ void Transmit_Key_Code(void)
     {
       key_code = KEY_IN3;
     }break;
-
+		
+		case IR_INMODE:
+		{
+			key_code = KEY_INMODE;
+		}break;
+		
+		case IR_SCL1X:
+		{
+			key_code = KEY_SCL1X ;
+		}break;
+		
+		case IR_SCL2X:
+		{
+			key_code = KEY_SCL2X ;
+		}break;
+		
+		case IR_SCL3X:
+		{
+			key_code = KEY_SCL2X;
+		}break;
+		
+		case IR_SCLINE:
+		{
+			key_code = KEY_SCLINE;
+		}break;
+		
     case IR_NAVU:
     {
       key_code = KEY_NAVU;
@@ -323,10 +399,54 @@ void Transmit_Key_Code(void)
     {
       key_code = KEY_NAVOK;
     }break;
-    
+		
+		case IR_NAVBK:
+    {
+      key_code = KEY_NAVBK;
+    }break;
+		
+		case IR_PSETA:
+    {
+      key_code = KEY_PSETA;
+    }break;
+		
+		case IR_PSETB:
+    {
+      key_code = KEY_PSETB;
+    }break;
+		
+		case IR_PSETC:
+    {
+      key_code = KEY_PSETC;
+    }break;
+		
+		case IR_PSETD:
+    {
+      key_code = KEY_PSETD;
+    }break;
+		
+		case IR_PSETE:
+    {
+      key_code = KEY_PSETE;
+    }break;
+		
+		case IR_PSETF:
+    {
+      key_code = KEY_PSETF;
+    }break;
+		
+		case IR_PSETG:
+    {
+      key_code = KEY_PSETG;
+    }break;
+		
+		case IR_PSET0:
+    {
+      key_code = KEY_PSET0;
+    }break;
+		
 		default:
 		{
-			key_code = 0x40;
 			valid_key = 0x00;
 		} break;
   }
@@ -334,12 +454,13 @@ void Transmit_Key_Code(void)
   {
     HAL_GPIO_WritePin(PWR_ON_GPIO_Port, PWR_ON_Pin, GPIO_PIN_SET);
   }
-  if(valid_key==0x01){
+  if(valid_key){
 		HAL_GPIO_WritePin(IR_VALID_GPIO_Port, IR_VALID_Pin, GPIO_PIN_SET);
 		HAL_UART_Transmit(&huart1, &key_code, 1,100);
 		HAL_GPIO_WritePin(IR_VALID_GPIO_Port, IR_VALID_Pin, GPIO_PIN_RESET);
   }
-  HAL_NVIC_EnableIRQ(EXTI4_15_IRQn);
+  __HAL_UART_DISABLE(&huart1);
+	HAL_NVIC_EnableIRQ(EXTI4_15_IRQn);
 }
 
 
@@ -357,11 +478,48 @@ void Transmit_IR_Code(void)
   {
     HAL_GPIO_WritePin(PWR_ON_GPIO_Port, PWR_ON_Pin, GPIO_PIN_SET);
   }
-  	HAL_GPIO_WritePin(IR_VALID_GPIO_Port, IR_VALID_Pin, GPIO_PIN_SET);
-		HAL_UART_Transmit(&huart1, &correct_data, 1,100);
-		HAL_GPIO_WritePin(IR_VALID_GPIO_Port, IR_VALID_Pin, GPIO_PIN_RESET);
+  	
+	HAL_GPIO_WritePin(IR_VALID_GPIO_Port, IR_VALID_Pin, GPIO_PIN_SET);
+	HAL_UART_Transmit(&huart1, &correct_data, 1,100);
+	HAL_GPIO_WritePin(IR_VALID_GPIO_Port, IR_VALID_Pin, GPIO_PIN_RESET);
   
+	__HAL_UART_DISABLE(&huart1);
   HAL_NVIC_EnableIRQ(EXTI4_15_IRQn);
+}
+
+uint8_t Test_Address(void)
+{
+	uint8_t address;
+	
+	address = (correct_data >> 6) & 0x1F;
+	
+	if(address == 24 || address == 25 || address == 27 || address == 28)
+	{
+		if(!READ_DIP_SWITCH_0 && !READ_DIP_SWITCH_1 && address == 24)
+		{
+			return 1;
+		}
+		else
+		if(!READ_DIP_SWITCH_0 && READ_DIP_SWITCH_1 && address == 25)
+		{
+			return 1;
+		}
+		else
+		if(READ_DIP_SWITCH_0 && !READ_DIP_SWITCH_1 && address == 28)
+		{
+			return 1;
+		}
+		else
+		if(READ_DIP_SWITCH_0 && READ_DIP_SWITCH_1 && address == 27)
+		{
+			return 1;
+		}
+		else
+			return 0;
+
+	}
+	
+	
 }
 
 
