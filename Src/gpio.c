@@ -80,7 +80,7 @@ void MX_GPIO_Init(void)
   HAL_GPIO_Init(IR_GPIO_Port, &GPIO_InitStruct);
 
   /*Configure GPIO pins : PAPin PAPin */
-  GPIO_InitStruct.Pin = DIP_SWITCH_BIT_1_Pin|DIP_SWITCH_BIT_0_Pin;
+  GPIO_InitStruct.Pin = DIP_SWITCH_BIT_0_Pin|DIP_SWITCH_BIT_1_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);

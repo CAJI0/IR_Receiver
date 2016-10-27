@@ -49,10 +49,10 @@
 #define IR_VALID_GPIO_Port GPIOA
 #define IR_Pin GPIO_PIN_7
 #define IR_GPIO_Port GPIOA
-#define DIP_SWITCH_BIT_1_Pin GPIO_PIN_13
-#define DIP_SWITCH_BIT_1_GPIO_Port GPIOA
-#define DIP_SWITCH_BIT_0_Pin GPIO_PIN_14
+#define DIP_SWITCH_BIT_0_Pin GPIO_PIN_9
 #define DIP_SWITCH_BIT_0_GPIO_Port GPIOA
+#define DIP_SWITCH_BIT_1_Pin GPIO_PIN_10
+#define DIP_SWITCH_BIT_1_GPIO_Port GPIOA
 /* USER CODE BEGIN Private defines */
 
 /* USER CODE END Private defines */
