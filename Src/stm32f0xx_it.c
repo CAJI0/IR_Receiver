@@ -111,6 +111,8 @@ uint8_t key_code;
 uint8_t last_control_bit;
 uint8_t first_load = 1;
 
+uint32_t i;
+
 void Transmit_Key_Code(void);
 
 void Transmit_IR_Code(void);
@@ -212,9 +214,10 @@ void EXTI4_15_IRQHandler(void)
 			}
 			if((bit_cnt == 14 && !last_bit) || (bit_cnt == 14 && last_bit && last_edge))
 			{
-				if((last_control_bit != ((receive_data >> 11) & 0x01)) || (first_load))
-				{
-					first_load = 0;
+				if(Test_Address()){
+				//if((last_control_bit != ((receive_data >> 11) & 0x01)) || (first_load))
+				//{
+				//	first_load = 0;
 					
 					#ifdef TRANSMIT_KEY_CODE
 					Transmit_Key_Code();
@@ -223,7 +226,8 @@ void EXTI4_15_IRQHandler(void)
 					#ifdef TRANSMIT_IR_CODE
 					Transmit_IR_Code();
 					#endif
-					last_control_bit = (receive_data >> 11) & 0x01;
+					//last_control_bit = (receive_data >> 11) & 0x01;
+				//}
 				}
 				else
 				{
@@ -248,11 +252,11 @@ void EXTI4_15_IRQHandler(void)
 			
 			if((bit_cnt == 14 && !last_bit) || (bit_cnt == 14 && last_bit && last_edge))
 			{	
-				if((last_control_bit != ((receive_data >> 11) & 0x01)) || first_load){
+				if( Test_Address()){
+				
+				//if((last_control_bit != ((receive_data >> 11) & 0x01)) || first_load){
 					
-					if(Test_Address()){
-						
-						first_load = 0;
+						//first_load = 0;
 						
 						#ifdef TRANSMIT_KEY_CODE
 						Transmit_Key_Code();
@@ -262,8 +266,8 @@ void EXTI4_15_IRQHandler(void)
 						Transmit_IR_Code();
 						#endif
 						
-						last_control_bit = (receive_data >> 11) & 0x01;
-					}
+						//last_control_bit = (receive_data >> 11) & 0x01;
+					//}
 				}
 				else
 				{
@@ -479,19 +483,29 @@ void Transmit_IR_Code(void)
     HAL_GPIO_WritePin(PWR_ON_GPIO_Port, PWR_ON_Pin, GPIO_PIN_SET);
   }
   	
-	HAL_GPIO_WritePin(IR_VALID_GPIO_Port, IR_VALID_Pin, GPIO_PIN_SET);
-	HAL_UART_Transmit(&huart1, &correct_data, 1,100);
-	HAL_GPIO_WritePin(IR_VALID_GPIO_Port, IR_VALID_Pin, GPIO_PIN_RESET);
-  
+	if((last_control_bit != ((receive_data >> 11) & 0x01)) || first_load)
+	{
+		first_load = 0;
+		HAL_GPIO_WritePin(IR_VALID_GPIO_Port, IR_VALID_Pin, GPIO_PIN_SET);
+		HAL_UART_Transmit(&huart1, &correct_data, 1,100);
+		HAL_GPIO_WritePin(IR_VALID_GPIO_Port, IR_VALID_Pin, GPIO_PIN_RESET);		
+		last_control_bit = (receive_data >> 11) & 0x01;
+	}
+	else
+	{
+		HAL_GPIO_TogglePin(IR_VALID_GPIO_Port, IR_VALID_Pin);
+		last_control_bit = (receive_data >> 11) & 0x01;
+	}
+	
 	__HAL_UART_DISABLE(&huart1);
   HAL_NVIC_EnableIRQ(EXTI4_15_IRQn);
 }
 
 uint8_t Test_Address(void)
 {
-	uint8_t address;
+	uint16_t address;
 	
-	address = (correct_data >> 6) & 0x1F;
+	address = (receive_data >> 6) & 0x1F;
 	
 	if(address == 24 || address == 25 || address == 27 || address == 28)
 	{
@@ -517,9 +531,9 @@ uint8_t Test_Address(void)
 		else
 			return 0;
 
-	}
-	
-	
+	}	
+	else
+	return 0;
 }
 
 
