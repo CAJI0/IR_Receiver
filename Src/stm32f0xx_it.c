@@ -39,7 +39,8 @@
 #include "tim.h"
 #include "usart.h"
 
-#define TRANSMIT_IR_CODE
+//#define TRANSMIT_IR_CODE
+#define TRANSMIT_KEY_CODE
 
 #define IR_ON         0x01
 #define IR_MUTE       0x02
@@ -110,6 +111,7 @@ uint8_t last_edge;
 uint8_t key_code;
 uint8_t last_control_bit;
 uint8_t first_load = 1;
+uint8_t new_frame;
 
 uint32_t i;
 
@@ -124,6 +126,7 @@ uint8_t Test_Address(void);
 
 /* External variables --------------------------------------------------------*/
 extern TIM_HandleTypeDef htim16;
+extern TIM_HandleTypeDef htim17;
 
 /******************************************************************************/
 /*            Cortex-M0 Processor Interruption and Exception Handlers         */ 
@@ -188,6 +191,7 @@ void EXTI4_15_IRQHandler(void)
 		mode = RECEIVE;
 		last_state = CHECK;
 		last_edge = 0;
+		new_frame = 1;
 	}
 	else
 	{
@@ -309,6 +313,24 @@ void TIM16_IRQHandler(void)
   /* USER CODE END TIM16_IRQn 1 */
 }
 
+/**
+* @brief This function handles TIM17 global interrupt.
+*/
+void TIM17_IRQHandler(void)
+{
+  /* USER CODE BEGIN TIM17_IRQn 0 */
+
+  /* USER CODE END TIM17_IRQn 0 */
+  HAL_TIM_IRQHandler(&htim17);
+  /* USER CODE BEGIN TIM17_IRQn 1 */
+	__HAL_TIM_DISABLE(&htim17);
+
+	if(!new_frame)
+			HAL_GPIO_WritePin(IR_VALID_GPIO_Port, IR_VALID_Pin, GPIO_PIN_RESET);
+	
+  /* USER CODE END TIM17_IRQn 1 */
+}
+
 /* USER CODE BEGIN 1 */
 
 
@@ -371,7 +393,7 @@ void Transmit_Key_Code(void)
 		
 		case IR_SCL3X:
 		{
-			key_code = KEY_SCL2X;
+			key_code = KEY_SCL3X;
 		}break;
 		
 		case IR_SCLINE:
@@ -458,11 +480,28 @@ void Transmit_Key_Code(void)
   {
     HAL_GPIO_WritePin(PWR_ON_GPIO_Port, PWR_ON_Pin, GPIO_PIN_SET);
   }
-  if(valid_key){
+  new_frame = 0;
+	
+	if(valid_key){
+		
+	__HAL_TIM_SET_COUNTER(&htim17, 0);
+	HAL_TIM_Base_Start_IT(&htim17);
+		
+	
+	if((last_control_bit != ((receive_data >> 11) & 0x01)) || first_load)
+	{
+		first_load = 0;
 		HAL_GPIO_WritePin(IR_VALID_GPIO_Port, IR_VALID_Pin, GPIO_PIN_SET);
-		HAL_UART_Transmit(&huart1, &key_code, 1,100);
-		HAL_GPIO_WritePin(IR_VALID_GPIO_Port, IR_VALID_Pin, GPIO_PIN_RESET);
-  }
+		HAL_UART_Transmit(&huart1, &key_code, 1,100);	
+		last_control_bit = (receive_data >> 11) & 0x01;
+	}
+	else
+	{
+		HAL_GPIO_TogglePin(IR_VALID_GPIO_Port, IR_VALID_Pin);
+		last_control_bit = (receive_data >> 11) & 0x01;
+	}
+
+ }
   __HAL_UART_DISABLE(&huart1);
 	HAL_NVIC_EnableIRQ(EXTI4_15_IRQn);
 }
@@ -482,13 +521,16 @@ void Transmit_IR_Code(void)
   {
     HAL_GPIO_WritePin(PWR_ON_GPIO_Port, PWR_ON_Pin, GPIO_PIN_SET);
   }
-  	
+  new_frame = 0;
+	__HAL_TIM_SET_COUNTER(&htim17, 0);
+	HAL_TIM_Base_Start_IT(&htim17);
+		
+	
 	if((last_control_bit != ((receive_data >> 11) & 0x01)) || first_load)
 	{
 		first_load = 0;
 		HAL_GPIO_WritePin(IR_VALID_GPIO_Port, IR_VALID_Pin, GPIO_PIN_SET);
-		HAL_UART_Transmit(&huart1, &correct_data, 1,100);
-		HAL_GPIO_WritePin(IR_VALID_GPIO_Port, IR_VALID_Pin, GPIO_PIN_RESET);		
+		HAL_UART_Transmit(&huart1, &correct_data, 1,100);	
 		last_control_bit = (receive_data >> 11) & 0x01;
 	}
 	else
